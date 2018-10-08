@@ -1,16 +1,18 @@
 package com.pankesh.productcommand.configuration;
 
 
+import com.pankesh.productcommand.aggregates.ProductAggregate;
 import org.axonframework.commandhandling.model.Repository;
 import org.axonframework.common.jpa.ContainerManagedEntityManagerProvider;
 import org.axonframework.common.jpa.EntityManagerProvider;
-import org.axonframework.common.jpa.SimpleEntityManagerProvider;
 import org.axonframework.common.transaction.TransactionManager;
 import org.axonframework.eventhandling.saga.repository.SagaStore;
 import org.axonframework.eventhandling.saga.repository.jpa.JpaSagaStore;
 import org.axonframework.eventhandling.tokenstore.TokenStore;
 import org.axonframework.eventhandling.tokenstore.jpa.JpaTokenStore;
-import org.axonframework.eventsourcing.*;
+import org.axonframework.eventsourcing.EventCountSnapshotTriggerDefinition;
+import org.axonframework.eventsourcing.EventSourcingRepository;
+import org.axonframework.eventsourcing.SnapshotTriggerDefinition;
 import org.axonframework.eventsourcing.eventstore.EmbeddedEventStore;
 import org.axonframework.eventsourcing.eventstore.EventStorageEngine;
 import org.axonframework.eventsourcing.eventstore.EventStore;
@@ -27,7 +29,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import com.pankesh.productcommand.aggregates.ProductAggregate;
+
 import javax.persistence.EntityManagerFactory;
 import javax.sql.DataSource;
 import java.sql.SQLException;
@@ -74,14 +76,6 @@ public class AxonConfiguration {
         return new JacksonSerializer();
     }
 
-    /*@Bean(name = "axonMongoTemplate")
-    MongoTemplate axonMongoTemplate() {
-        MongoTemplate template = new DefaultMongoTemplate(mongoClient, databaseName)
-                .withSnapshotCollection(snapshotCollectionName).withDomainEventsCollection(eventsCollectionName).withSagasCollection(sagaCollectionName);
-
-        return template;
-    }*/
-
     @Bean
     EventStore eventStore() {
 
@@ -90,61 +84,54 @@ public class AxonConfiguration {
     }
 
     @Bean
-    SagaStore sagaStore(){
-
-        return new JpaSagaStore(new XStreamSerializer(),entityManagerProvider());
-        //return new MongoSagaStore(axonMongoTemplate(), new XStreamSerializer());
+    SagaStore sagaStore() {
+        return new JpaSagaStore(new XStreamSerializer(), entityManagerProvider());
     }
+
     @Bean
-    EntityManagerProvider entityManagerProvider()
-    {
+    EntityManagerProvider entityManagerProvider() {
         ContainerManagedEntityManagerProvider entityManagerProvider = new ContainerManagedEntityManagerProvider();
         entityManagerProvider.setEntityManager(entityManagerFactory.createEntityManager());
         return entityManagerProvider;
     }
 
-    DataSource datasource() {
-        return dataSource;
-    }
-
-
-
     @Bean
     EventStorageEngine eventStoreEngine() {
         try {
 
-            return new JpaEventStorageEngine(new XStreamSerializer(), null, datasource() ,axonJsonSerializer(),entityManagerProvider(),transactionManager);
+            return new JpaEventStorageEngine(new XStreamSerializer(), null, dataSource, axonJsonSerializer(), entityManagerProvider(), transactionManager);
         } catch (SQLException e) {
             e.printStackTrace();
             return null;
         }
-        //return new MongoEventStorageEngine(new XStreamSerializer(), null, axonJsonSerializer(), axonMongoTemplate(), new DocumentPerEventStorageStrategy());
+
 
     }
+
 
     @Bean
     public TokenStore tokenStore(EntityManagerProvider entityManagerProvider) {
         return new JpaTokenStore(entityManagerProvider, axonJsonSerializer());
-        //return new MongoTokenStore(axonMongoTemplate(), axonJsonSerializer());
+
     }
 
 
     @Bean
-    public SpringAggregateSnapshotter snapshotter (ParameterResolverFactory parameterResolverFactory){
+    public SpringAggregateSnapshotter snapshotter(ParameterResolverFactory parameterResolverFactory) {
         Executor executor = Executors.newSingleThreadExecutor();
-        return new SpringAggregateSnapshotter(eventStore(),parameterResolverFactory,executor,transactionManager);
+        return new SpringAggregateSnapshotter(eventStore(), parameterResolverFactory, executor, transactionManager);
 
     }
 
     @Bean
-    public SnapshotTriggerDefinition snapshotTriggerDefinition(SpringAggregateSnapshotter snapshotter){
-        return new EventCountSnapshotTriggerDefinition(snapshotter,2);
+    public SnapshotTriggerDefinition snapshotTriggerDefinition(SpringAggregateSnapshotter snapshotter) {
+        return new EventCountSnapshotTriggerDefinition(snapshotter, 2);
     }
 
     @Bean
     @Autowired
     public Repository<ProductAggregate> productAggregateRepository(SnapshotTriggerDefinition snapshotTriggerDefinition) {
-        EventSourcingRepository<ProductAggregate> repo = new EventSourcingRepository(ProductAggregate.class,eventStore(),snapshotTriggerDefinition);
+        EventSourcingRepository<ProductAggregate> repo = new EventSourcingRepository(ProductAggregate.class, eventStore(), snapshotTriggerDefinition);
         return repo;
     }
 
